@@ -1,23 +1,35 @@
 from .config import get_config
 from importlib import import_module
 from datetime import datetime, timezone
+from time import time
 from kubernetes.client.models import V1NamespaceList
 from kubernetes.client import ApiException
 from collections import defaultdict
 from typing import Any
+import models.v1_18 as models
+
 _mcp_config = get_config()
 
-models = import_module(f"models.{_mcp_config.cm_version}")
+_CERT_CACHE: dict[str, dict[str, Any]] = {}
+_CACHE_TTL = 300
+
+def clear_cert_cache(namespace_name: str | None = None) -> None:
+    """Clear cached certs for a namespace or all."""
+    if namespace_name is None:
+        _CERT_CACHE.clear()
+    else:
+        _CERT_CACHE.pop(namespace_name, None)
 
 def list_certificates(
-        namespace_name="", 
-        all_namespaces=False, 
-        include_domains=False,
-        list_expired=False
-    ) -> dict[str, list[dict[str, Any]]]:
-    
-    result: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    
+        namespace_name: str = "",
+        all_namespaces: bool = False,
+        include_domains: bool = False,
+        list_expired: bool = False,
+        cursor: int = -1,
+        page_size: int = 100
+    ) -> dict[str, str | dict[str, None | str | int | list[dict[str, Any]]]]:
+    result: dict[str, str | dict[str, None | str | int | list[dict[str, Any]]]] = defaultdict(dict)
+
     def list_domains(crt) -> list[str]:
         domains = crt.spec.dnsNames
         if crt.spec.commonName not in domains:
@@ -25,47 +37,106 @@ def list_certificates(
         return domains
 
     def is_expired(crt) -> bool:
-        if crt.status.notAfter and crt.status.notAfter < datetime.now(timezone.utc):
-            return True
-        return False
+        return bool(crt.status.notAfter and crt.status.notAfter < datetime.now(timezone.utc))
 
-    def fetch_for_namespace(ns: str):
+    def fetch_all_for_namespace(ns: str) -> list[dict[str, Any]]:
+        certs_out = []
         try:
-            crt_list_response = _mcp_config.api.list_namespaced_custom_object(
+            resp = _mcp_config.api.list_namespaced_custom_object(
                 group="cert-manager.io",
                 version="v1",
                 namespace=ns,
                 plural="certificates"
-                )
+            )
         except ApiException as e:
             if e.status == 404:
                 result[ns] = None
-                return
+                return []
             raise
         else:
-            certs = []
-            for item in crt_list_response["items"]:
+            for item in resp["items"]:
                 cert = models.Certificate.model_validate(item)
-                if list_expired:
-                    if is_expired(cert):
-                        certs.append(cert)
-                        continue
-                else:
-                    certs.append(cert)
-
-            for cert in certs:
-                result_insertion = {"name": cert.metadata["name"]}
-                if include_domains:
-                    result_insertion["domains"] = list_domains(cert)
-                result[ns].append(result_insertion)
+                if list_expired and not is_expired(cert):
+                    continue
+                entry = {"name": cert.metadata["name"]}
+                if include_domains or cursor >= 0:
+                    entry["domains"] = list_domains(cert)
+                certs_out.append(entry)
+            return certs_out
 
     if all_namespaces:
         namespaces: V1NamespaceList = _mcp_config.core.list_namespace()
         for ns in namespaces.items:
-            fetch_for_namespace(ns.metadata.name)
+            name = ns.metadata.name
+            certs = fetch_all_for_namespace(name)
+            result[name]["certs"] = certs
+            result[name]["certs_count"] = len(certs)
         return result
-    
-    fetch_for_namespace(namespace_name)
+
     if not namespace_name:
         raise ValueError("Namespace name is required when all_namespaces=False")
+
+    if cursor == -1:
+        certs = fetch_all_for_namespace(namespace_name)
+        result[namespace_name]["certs"] = certs
+        result[namespace_name]["certs_count"] = len(certs)
+        result[namespace_name]["next_cursor"] = None
+        return result
+
+    now = time()
+    cache_entry = _CERT_CACHE.get(namespace_name)
+    if not cache_entry or (now - cache_entry["ts"]) > _CACHE_TTL:
+        _CERT_CACHE[namespace_name] = {
+            "ts": now,
+            "items": fetch_all_for_namespace(namespace_name)
+        }
+
+    items = _CERT_CACHE[namespace_name]["items"]
+    start = cursor
+    end = cursor + page_size
+    page_items = None
+    if include_domains:
+        page_items = items[start:end]
+    else:
+        page_items = [{"name": item["name"]} for item in items[start:end]]
+    next_cursor = end if end < len(items) else None
+
+    result[namespace_name]["certs"] = page_items
+    result[namespace_name]["certs_count"] = len(items)
+    result[namespace_name]["next_cursor"] = next_cursor
+
+    if next_cursor is None:
+        _CERT_CACHE.pop(namespace_name, None)
+
     return result
+
+def get_certificate(namespace_name: str = "", resource_name: str = "") -> dict[str, Any]:
+    result: dict[str, Any] = defaultdict(dict)
+    try:
+        resp = _mcp_config.api.get_namespaced_custom_object(
+            group="cert-manager.io",
+            version="v1",
+            namespace=namespace_name,
+            plural="certificates",
+            name=resource_name
+        )
+    except ApiException as e:
+        if e.status == 404:
+            result = {}
+            return result
+    else:
+        if namespace_name == "" or resource_name == "":
+            raise ValueError("Both namespace_name and resource_name are required")
+        cert = models.Certificate.model_validate(resp)
+        result["validNotAfter"] = cert.status.notAfter
+        result["dateNow"] = datetime.now(timezone.utc)
+        result["issuer"] = {
+            "kind": cert.spec.issuerRef.kind,
+            "name": cert.spec.issuerRef.name
+        }
+        domains = cert.spec.dnsNames
+        if cert.spec.commonName not in domains:
+            domains.append(cert.spec.commonName)
+        result["domains"] = domains
+        result["kubernetesSecret"] = cert.spec.secretName
+        return result
