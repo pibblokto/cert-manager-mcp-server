@@ -8,7 +8,7 @@ from typing import Any
         "only expired certificates will be listed. Argumet cursor represents offset and is used along with page_size (number of certs per fetch) if there are too many certificates in namespace" \
         "(defaults to -1 in which case everything will be fetched. If you want to use pagination start with 0)",
         annotations={
-            "title": "List Certificates",
+            "title": "List certificates",
             "readOnlyHint": True,
             "openWorldHint": True,
         }
@@ -43,10 +43,21 @@ def list_certificates(
 @mcp.tool(
         description="Gets detailed information about certificate. Both namespace_name and resource_name (name of certificate) are required",
         annotations={
-            "title": "Get Certificate",
+            "title": "Get certificate",
             "readOnlyHint": True,
             "openWorldHint": True,
         }
 )
-def get_certificate(namespace_name: str = "", resource_name: str = "") -> dict[str, Any]:
-    return certificates.get_certificate(namespace_name, resource_name)
+def get_certificate(namespace_name: str = "", certificate_name: str = "") -> dict[str, Any]:
+    return certificates.get_certificate(namespace_name, certificate_name)
+
+@mcp.tool(
+        description="Forces renewal of a certificate in a given namespace",
+        annotations={
+            "title": "Renew certificate",
+            "readOnlyHint": False,
+            "openWorldHint": True,
+        }
+)
+def renew_certificate(namespace_name: str = "", certificate_name: str = ""):
+    return certificates.renew_certificate(namespace_name, certificate_name)
