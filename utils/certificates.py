@@ -6,6 +6,7 @@ from kubernetes.client.models import V1NamespaceList
 from kubernetes.client import ApiException
 from collections import defaultdict
 from typing import Any
+from copy import deepcopy
 import models.v1_18 as models
 
 _mcp_config = get_config()
@@ -28,6 +29,7 @@ def list_certificates(
         cursor: int = -1,
         page_size: int = 100
     ) -> dict[str, str | dict[str, None | str | int | list[dict[str, Any]]]]:
+    _mcp_config.refresh_config()
     result: dict[str, str | dict[str, None | str | int | list[dict[str, Any]]]] = defaultdict(dict)
 
     def list_domains(crt) -> list[str]:
@@ -110,23 +112,24 @@ def list_certificates(
 
     return result
 
-def get_certificate(namespace_name: str = "", resource_name: str = "") -> dict[str, Any]:
+def get_certificate(namespace_name: str = "", certificate_name: str = "") -> dict[str, Any]:
+    _mcp_config.refresh_config()
     result: dict[str, Any] = defaultdict(dict)
     try:
+        if namespace_name == "" or certificate_name == "":
+            raise ValueError("Both namespace_name and certificate_name are required")
         resp = _mcp_config.api.get_namespaced_custom_object(
             group="cert-manager.io",
             version="v1",
             namespace=namespace_name,
             plural="certificates",
-            name=resource_name
+            name=certificate_name
         )
     except ApiException as e:
         if e.status == 404:
             result = {}
             return result
     else:
-        if namespace_name == "" or resource_name == "":
-            raise ValueError("Both namespace_name and resource_name are required")
         cert = models.Certificate.model_validate(resp)
         result["validNotAfter"] = cert.status.notAfter
         result["dateNow"] = datetime.now(timezone.utc)
@@ -140,3 +143,55 @@ def get_certificate(namespace_name: str = "", resource_name: str = "") -> dict[s
         result["domains"] = domains
         result["kubernetesSecret"] = cert.spec.secretName
         return result
+
+def renew_certificate(namespace_name: str, certificate_name: str):
+    _mcp_config.refresh_config()
+    try:
+        resp = _mcp_config.api.get_namespaced_custom_object(
+            group="cert-manager.io",
+            version="v1",
+            namespace=namespace_name,
+            plural="certificates",
+            name=certificate_name
+        )
+    except ApiException as e:
+        if e.status == 404:
+            result = {}
+            return result
+    else:
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        observed_generation = resp["metadata"]["generation"]
+
+        new_condition = {
+            "type": "Issuing",
+            "status": "True",
+            "reason": "ManuallyTriggered",
+            "message": "Certificate re-issuance manually triggered",
+            "observedGeneration": observed_generation,
+            "lastTransitionTime": now,
+        }
+
+        status = deepcopy(resp.get("status", {}))
+        conditions = list(status.get("conditions") or [])
+        idx = next((i for i, c in enumerate(conditions) if c.get("type") == "Issuing"), None)
+
+        if idx is not None:
+            old = conditions[idx]
+            if str(old.get("status")) == "True" and old.get("lastTransitionTime"):
+                new_condition["lastTransitionTime"] = old["lastTransitionTime"]
+            conditions[idx] = new_condition
+        else:
+            conditions.append(new_condition)
+
+        status["conditions"] = conditions
+        try:
+            _mcp_config.api.patch_namespaced_custom_object_status(
+                group="cert-manager.io",
+                version="v1",
+                namespace=namespace_name,
+                plural="certificates",
+                name=certificate_name,
+                body={"status": status},
+            )
+        except ApiException as e:
+            raise
