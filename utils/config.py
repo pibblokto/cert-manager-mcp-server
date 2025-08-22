@@ -2,11 +2,12 @@ import argparse
 from kubernetes import client, config
 import subprocess
 import os
+import time
 
 class MCPConfig:
     def __init__(self, cm_version: str, context: str = None, kubeconfig_path: str = None):
         self.cm_version = "_".join(cm_version.split("."))
-        self.kubeconfig_path = kubeconfig_path
+        self.kubeconfig_path = kubeconfig_path or os.path.expanduser("~/.kube/config")
         if context is None:
             _, current_context = config.list_kube_config_contexts(config_file=kubeconfig_path)
             self.context = current_context["name"]
@@ -16,7 +17,7 @@ class MCPConfig:
         self.core = None
         self.refresh_config()
 
-    def _refresh_token(self):
+    def _refresh_token(self, retries=3, delay=1) -> bool:
         cmd = ["kubectl"]
         if self.kubeconfig_path:
             cmd += ["--kubeconfig", self.kubeconfig_path]
@@ -24,12 +25,18 @@ class MCPConfig:
             cmd += ["--context", self.context]
         cmd += ["get", "ns", "default", "--request-timeout=10s", "--quiet"]
 
-        subprocess.run(
-            cmd,
-            check=False,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
+        for attempt in range(1, retries + 1):
+            result = subprocess.run(
+                cmd,
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            if result.returncode == 0:
+                return True
+            if attempt < retries:
+                time.sleep(delay)
+        return False
 
     def refresh_config(self):
         api_client = config.new_client_from_config(

@@ -6,13 +6,21 @@ Add the following config to Claude Desktop:
 ```json
 {
   "mcpServers": {
-    "cert_manager_server": {
-      "command": "uv",
+    "kubernetes": {
+      "command": "docker",
       "args": [
-        "--directory",
-        "/path/to/repo/cert-manager-mcp-server",
         "run",
-        "main.py"
+        "-i",
+        "--rm",
+        "-v",
+        "~/.kube:/home/appuser/.kube:ro",
+        "-v",
+        "~/.config/gcloud:/home/appuser/.config/gcloud:ro",
+        "-e",
+        "CLOUDSDK_CORE_PROJECT=<YOUR_GCP_PROJECT>",
+        "-e",
+        "CLOUDSDK_COMPUTE_REGION=<DEFAULT_GCP_REGION",
+        "piblokto/cert-manager-mcp-server:latest"
       ]
     }
   }

@@ -1,5 +1,4 @@
 from .config import get_config
-from importlib import import_module
 from datetime import datetime, timezone
 from time import time
 from kubernetes.client.models import V1NamespaceList
@@ -15,7 +14,6 @@ _CERT_CACHE: dict[str, dict[str, Any]] = {}
 _CACHE_TTL = 300
 
 def clear_cert_cache(namespace_name: str | None = None) -> None:
-    """Clear cached certs for a namespace or all."""
     if namespace_name is None:
         _CERT_CACHE.clear()
     else:
@@ -27,19 +25,24 @@ def list_certificates(
         include_domains: bool = False,
         list_expired: bool = False,
         cursor: int = -1,
-        page_size: int = 100
+        page_size: int = 100,
+        sort_by_domain: str = ""
     ) -> dict[str, str | dict[str, None | str | int | list[dict[str, Any]]]]:
     _mcp_config.refresh_config()
     result: dict[str, str | dict[str, None | str | int | list[dict[str, Any]]]] = defaultdict(dict)
 
-    def list_domains(crt) -> list[str]:
+    def list_domains(crt: models.Certificate) -> list[str]:
         domains = crt.spec.dnsNames
         if crt.spec.commonName not in domains:
             domains.append(crt.spec.commonName)
         return domains
 
-    def is_expired(crt) -> bool:
+    def is_expired(crt: models.Certificate) -> bool:
         return bool(crt.status.notAfter and crt.status.notAfter < datetime.now(timezone.utc))
+
+    def is_for_domain(crt: models.Certificate, domain_name: str) -> bool:
+        domains = list_domains(crt)
+        return domain_name in domains
 
     def fetch_all_for_namespace(ns: str) -> list[dict[str, Any]]:
         certs_out = []
@@ -58,6 +61,8 @@ def list_certificates(
         else:
             for item in resp["items"]:
                 cert = models.Certificate.model_validate(item)
+                if sort_by_domain != "" and not is_for_domain(crt=cert, domain_name=sort_by_domain):
+                    continue
                 if list_expired and not is_expired(cert):
                     continue
                 entry = {"name": cert.metadata["name"]}

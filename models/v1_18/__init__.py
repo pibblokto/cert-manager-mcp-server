@@ -17,11 +17,13 @@ from .clusterissuer import (
     Clusterissuer as ClusterIssuer,
     Spec as ClusterIssuerSpec,
     Status as ClusterIssuerStatus,
+    Solver as ClusterIssuerSolver,
 )
 from .issuer import (
     Issuer,
     Spec as IssuerSpec,
     Status as IssuerStatus,
+    Solver as IssuerSolver,
 )
 from .order import (
     Order,
@@ -33,7 +35,7 @@ __all__ = [
     "Certificate", "CertificateSpec", "CertificateStatus",
     "CertificateRequest", "CertificateRequestSpec", "CertificateRequestStatus",
     "Challenge", "ChallengeSpec", "ChallengeStatus",
-    "ClusterIssuer", "ClusterIssuerSpec", "ClusterIssuerStatus",
-    "Issuer", "IssuerSpec", "IssuerStatus",
+    "ClusterIssuer", "ClusterIssuerSpec", "ClusterIssuerStatus", "ClusterIssuerSolver",
+    "Issuer", "IssuerSpec", "IssuerStatus", "IssuerSolver",
     "Order", "OrderSpec", "OrderStatus",
 ]
