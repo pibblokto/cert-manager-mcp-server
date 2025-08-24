@@ -7,7 +7,6 @@ from collections import defaultdict
 from typing import Any
 from copy import deepcopy
 import models.v1_18 as models
-import logging
 
 _mcp_config = get_config()
 
@@ -33,7 +32,7 @@ def list_certificates(
     result: dict[str, str | dict[str, None | str | int | list[dict[str, Any]]]] = defaultdict(dict)
 
     def list_domains(crt: models.Certificate) -> list[str]:
-        domains = crt.spec.dnsNames
+        domains = crt.spec.dnsNames if crt.spec.dnsNames else []
         if crt.spec.commonName not in domains:
             domains.append(crt.spec.commonName)
         return domains
@@ -43,8 +42,6 @@ def list_certificates(
 
     def is_for_domain(crt: models.Certificate, domain_name: str) -> bool:
         domains = list_domains(crt)
-        logging.info(crt.metadata["name"])
-        logging.info(domains)
         if domain_name in domains:
             return True
         return False
