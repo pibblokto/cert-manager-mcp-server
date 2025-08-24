@@ -7,6 +7,7 @@ from collections import defaultdict
 from typing import Any
 from copy import deepcopy
 import models.v1_18 as models
+import logging
 
 _mcp_config = get_config()
 
@@ -42,7 +43,11 @@ def list_certificates(
 
     def is_for_domain(crt: models.Certificate, domain_name: str) -> bool:
         domains = list_domains(crt)
-        return domain_name in domains
+        logging.info(crt.metadata["name"])
+        logging.info(domains)
+        if domain_name in domains:
+            return True
+        return False
 
     def fetch_all_for_namespace(ns: str) -> list[dict[str, Any]]:
         certs_out = []

@@ -35,7 +35,7 @@ Claude Desktop config for GKE clusters:
         "-v",
         "~/.kube:/home/app/.kube:ro",
         "-v",
-        "~/.config/gcloud:/home/app/.config/gcloud:ro",
+        "~/.config/gcloud:/home/app/.config/gcloud",
         "-e",
         "CLOUDSDK_CORE_PROJECT=<YOUR_GCP_PROJECT>",
         "-e",
