@@ -1,25 +1,45 @@
 # cert-manager-mcp-server
-MCP Server for cert-manager
+This local MCP server lets you troubleshoot and interact with certificate and other resources managed by [cert-manager](https://github.com/cert-manager/cert-manager). 
 
 
-Add the following config to Claude Desktop:
+
+Claude Desktop config:
 ```json
 {
   "mcpServers": {
-    "kubernetes": {
+    "cert-manager-mcp-server": {
       "command": "docker",
       "args": [
         "run",
         "-i",
         "--rm",
         "-v",
-        "~/.kube:/home/appuser/.kube:ro",
+        "~/.kube:/home/app/.kube:ro",
+        "piblokto/cert-manager-mcp-server:latest"
+      ]
+    }
+  }
+}
+```
+
+Claude Desktop config for GKE clusters:
+```json
+{
+  "mcpServers": {
+    "cert-manager-mcp-server": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
         "-v",
-        "~/.config/gcloud:/home/appuser/.config/gcloud:ro",
+        "~/.kube:/home/app/.kube:ro",
+        "-v",
+        "~/.config/gcloud:/home/app/.config/gcloud:ro",
         "-e",
         "CLOUDSDK_CORE_PROJECT=<YOUR_GCP_PROJECT>",
         "-e",
-        "CLOUDSDK_COMPUTE_REGION=<DEFAULT_GCP_REGION",
+        "CLOUDSDK_COMPUTE_REGION=<DEFAULT_GCP_REGION>",
         "piblokto/cert-manager-mcp-server:latest"
       ]
     }
