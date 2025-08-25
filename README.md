@@ -10,7 +10,7 @@ Claude Desktop config:
       "command": "sh",
       "args": [
         "-c",
-        "docker run -i --rm -v ~/.kube:/home/app/.kube:ro -v ~/.config/gcloud:/home/app/.config/gcloud piblokto/cert-manager-mcp-server:latest"
+        "docker run -i --rm -v ~/.kube:/home/app/.kube:ro -v ~/.config/gcloud:/home/app/.config/gcloud piblokto/cert-manager-mcp-server:0.0.5"
       ]
     }
   }
@@ -25,7 +25,7 @@ Claude Desktop config for GKE clusters:
       "command": "sh",
       "args": [
         "-c",
-        "docker run -i --rm -v ~/.kube:/home/app/.kube:ro -v ~/.config/gcloud:/home/app/.config/gcloud -e CLOUDSDK_CORE_PROJECT=<DEFAULT_PROJECT_ID> -e CLOUDSDK_COMPUTE_REGION=<DEFAULT_COMPUTE_REGION> piblokto/cert-manager-mcp-server:latest"
+        "docker run -i --rm -v ~/.kube:/home/app/.kube:ro -v ~/.config/gcloud:/home/app/.config/gcloud -e CLOUDSDK_CORE_PROJECT=<DEFAULT_PROJECT_ID> -e CLOUDSDK_COMPUTE_REGION=<DEFAULT_COMPUTE_REGION> piblokto/cert-manager-mcp-server:0.0.5"
       ]
     }
   }
