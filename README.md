@@ -62,3 +62,8 @@ This MCP server provides the following tools for interacting with cert-manager a
 | `list_contexts` | List all available kubeconfig contexts | ✅ | None |
 | `get_current_context` | Get the currently active kubeconfig context | ✅ | None |
 | `switch_context` | Switch to a different kubeconfig context | ✅ | `ctx` |
+
+## Hosted deployment
+
+A hosted deployment is available on [Fronteir AI](https://fronteir.ai/mcp/pibblokto-cert-manager-mcp-server).
+
